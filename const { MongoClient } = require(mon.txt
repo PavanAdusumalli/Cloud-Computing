@@ -1,0 +1,67 @@
+const { MongoClient } = require("mongodb")
+const mqtt = require('mqtt')
+
+const mongodbUri = "mongodb://127.0.0.1"
+const mongoClient = new MongoClient(mongodbUri)
+
+const databaseName = "myNewDB"
+const temperatureCollectionName = "temperatureData"
+const humidityCollectionName = "humidityData"
+
+async function connectToDatabase() {
+  try {
+    await mongoClient.connect()
+    console.log("Connected to MongoDB ...")
+  } catch (error) {
+    console.error(`Error connecting to ${databaseName} database`)
+  }
+}
+
+async function main() {
+  try {
+    await connectToDatabase()
+
+    const temperatureCollection = mongoClient.db(databaseName).collection(temperatureCollectionName)
+    const humidityCollection = mongoClient.db(databaseName).collection(humidityCollectionName)
+
+    const mqttClient = mqtt.connect('mqtt://localhost')
+
+    mqttClient.on('connect', function () {
+      mqttClient.subscribe('home/sensor_data', function (err) {
+        if (!err) {
+          console.log('Subscribed to home/sensor_data')
+        }
+      })
+    })
+
+    mqttClient.on('message', function (topic, message) {
+      const data = JSON.parse(message.toString())
+      const timestamp = new Date(data.timestamp)
+      delete data.timestamp
+
+      if (data.temperature) {
+        temperatureCollection.insertOne({ timestamp, value: data.temperature })
+          .then(result => console.log(`Inserted temperature document: ${result.insertedId}`))
+          .catch(error => console.error(`Error inserting temperature document: ${error}`))
+      }
+
+      if (data.humidity) {
+        humidityCollection.insertOne({ timestamp, value: data.humidity })
+          .then(result => console.log(`Inserted humidity document: ${result.insertedId}`))
+          .catch(error => console.error(`Error inserting humidity document: ${error}`))
+      }
+    })
+
+    process.on('SIGINT', async () => {
+      console.log('Closing MongoDB client connection...')
+      await mongoClient.close()
+      process.exit()
+    })
+
+  } catch (err) {
+    console.error(`Error: ${err}`)
+  }
+}
+
+main()
+  .catch(error => console.error(`Error: ${error}`))

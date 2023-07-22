@@ -1,0 +1,109 @@
+const express = require('express')
+const app = express()
+const port = 3000
+const bodyParser = require('body-parser');
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+const { MongoClient } = require("mongodb")
+
+// Defining the DB instance, database, and collection
+const uri = "mongodb://127.0.0.1"
+const client = new MongoClient(uri)
+const dbName = "myNewDB"
+const temperatureCollectionName = "temperatureData"
+const humidityCollectionName = "humidityData"
+
+async function connectToDatabase() {
+  // Establish a connection to the database
+  try {
+    await client.connect()
+    console.log("Connected to MongoDB ...")
+  } catch (error) {
+    console.error(`Error connecting to ${dbName} database: ${error}`)
+  } 
+}
+
+app.get('/temperature', async (req, res) => {
+  try {
+    const temperatureCollection = client.db(dbName).collection(temperatureCollectionName)
+    let result = await temperatureCollection.find(
+      {timestamp: {$gt: new Date(Date.now() - 20 * 1000)}}, 
+      {projection: {_id: 0}}
+    ).toArray()
+    console.log(`Found ${result.length} documents`)
+    res.send(JSON.stringify(result))
+  } catch(err) {
+    console.error(`Error finding document: ${err}`)
+  }
+})
+
+
+app.get('/humidity', async (req, res) => {
+  try {
+    const humidityCollection = client.db(dbName).collection(humidityCollectionName)
+    let result = await humidityCollection.find({timestamp: {$gt: new Date(Date.now() - 20 * 1000)}}).toArray()
+    console.log(`Found ${result.length} documents`)
+    res.send(JSON.stringify(result))
+  } catch(err) {
+    console.error(`Error finding document: ${err}`)
+  }
+})
+
+
+app.get('/averageTemperature', async (req, res) => {
+  try {
+    const temperatureCollection = client.db(dbName).collection(temperatureCollectionName)
+    const results = await temperatureCollection.find({
+      timestamp: { $gt: new Date(Date.now() - 20 * 1000) }
+    }).toArray()
+
+    if (results.length > 0) {
+      let total = 0
+      for (let i = 0; i < results.length; i++) {
+        const doc = results[i]
+        console.log(doc.value)
+        total += doc.value
+      }
+      const avg = total / results.length
+
+      console.log(`Found ${avg} documents`)
+      res.send(JSON.stringify(avg))
+    } else {
+      console.log('No documents found')
+      res.send(JSON.stringify(null))
+    }
+  } catch(err) {
+    console.error(`Error finding documents: ${err}`)
+    res.status(500).send('Error finding documents')
+  }
+})
+
+
+
+app.get('/minTemperature', async (req, res) => {
+  try {
+    const temperatureCollection = client.db(dbName).collection(temperatureCollectionName)
+    let result = await temperatureCollection.find({timestamp: {$gt: new Date(Date.now() - 20 * 1000)}}).sort({temperature: 1}).limit(1).toArray()
+    console.log(`Found ${result.length} documents`)
+    res.send(JSON.stringify(result))
+  } catch(err) {
+    console.error(`Error finding document: ${err}`)
+  }
+})
+app.delete('/deleteTemperature', async (req, res) => {
+    try {
+      const temperatureCollection = client.db(dbName).collection(temperatureCollectionName)
+      let result = await temperatureCollection.deleteMany({timestamp: {$lt: new Date(Date.now() - 20 * 1000)}})
+      console.log(`Deleted ${result.deletedCount} documents`)
+      res.status(200).json(result)
+    } catch(err) {
+      console.error(`Error deleting documents: ${err}`)
+    }
+  })
+  
+  app.listen(port, async () => {
+    console.log(`Connected to the Express server on port ${port}`)
+    await connectToDatabase()
+  })
+  
+

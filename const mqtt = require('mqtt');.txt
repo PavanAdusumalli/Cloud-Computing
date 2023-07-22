@@ -1,0 +1,28 @@
+const mqtt = require('mqtt');
+
+const mqttClient = mqtt.connect('mqtt://localhost');
+
+let intervalId;
+
+intervalId = setInterval(function() {
+  const temp = getRandomValue(20, 100);
+  const humid = getRandomValue(30, 100);
+  const timestamp = Date.now();
+  const sensorData = {
+    "temperature": temp,
+    "humidity": humid,
+    "timestamp": timestamp
+  };
+  mqttClient.publish('home/sensor_data', JSON.stringify(sensorData));
+  console.log(`Published sensor data to MQTT: ${JSON.stringify(sensorData)}`);
+}, 2000);
+
+setTimeout(function() {
+  clearInterval(intervalId);
+  mqttClient.end();
+  console.log("Program ended.");
+}, 120000);
+
+function getRandomValue(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
